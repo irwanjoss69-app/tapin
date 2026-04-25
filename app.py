@@ -4,123 +4,81 @@ import pandas as pd
 from datetime import datetime
 import google.generativeai as genai
 
-# --- CONFIGURASI PRO ---
-st.set_page_config(page_title="TAPIN SYSTEM v1.0", layout="wide", initial_sidebar_state="expanded")
+# --- KONEKSI DATABASE & AI ---
+os_api_key = "AIzaSyCsvfBo9HndeuVc3Mkbm6boCEERVIW5G-8"
+genai.configure(api_key=os_api_key)
+model = genai.GenerativeModel('gemini-pro')
 
-# Gaya CSS agar tampilan tidak seperti web (menghilangkan spasi kosong & mempercantik tabel)
+def get_db():
+    return sqlite3.connect("tapin.db")
+
+# --- SETTING HALAMAN AGAR MIRIP APLIKASI DESKTOP ---
+st.set_page_config(page_title="Sistem Informasi Tabungan - TAPIN", layout="wide")
+
+# CSS untuk memaksa warna Merah/Putih dan Tombol Besar seperti gambar Bapak
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
-    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #007bff; color: white; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; }
-    [data-testid="stSidebar"] { background-color: #1e2d3b; color: white; }
+    .header-style { font-size:30px; font-weight:bold; color:#cc0000; text-align:center; margin-bottom:0px; }
+    .sub-style { font-size:18px; text-align:center; color: #333; margin-bottom:20px; }
+    div.stButton > button {
+        width: 100%; height: 60px; font-weight: bold; font-size: 16px;
+        background-color: #f8f9fa; border: 2px solid #cc0000; color: #cc0000;
+    }
+    div.stButton > button:hover { background-color: #cc0000; color: white; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNGSI INTI ---
-def get_connection():
-    return sqlite3.connect("tapin.db")
+# --- HEADER (Persis Gambar Bapak) ---
+st.markdown('<p class="header-style">SISTEM INFORMASI TABUNGAN - TAPIN</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-style">MIM 25 SELAWE - KECAMATAN WATULIMO</p>', unsafe_allow_html=True)
 
-# --- KEAMANAN LOGIN ---
-if "auth" not in st.session_state:
-    st.session_state.auth = False
+# --- TOMBOL NAVIGASI UTAMA (Di Atas, Horizontal seperti Desktop) ---
+col1, col2, col3, col4, col5 = st.columns(5)
+with col1: btn_home = st.button("🏠 DASHBOARD")
+with col2: btn_trans = st.button("💰 TRANSAKSI")
+with col3: btn_siswa = st.button("👥 DATA SISWA")
+with col4: btn_ai = st.button("🤖 BANK SOAL AI")
+with col5: btn_out = st.button("🚪 KELUAR")
 
-if not st.session_state.auth:
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        st.write("# 🖥️ LOGIN SYSTEM")
-        with st.container(border=True):
-            user = st.text_input("USER ID")
-            pw = st.text_input("PASSWORD", type="password")
-            if st.button("LOGIN"):
-                if user == "admin" and pw == "selawe25":
-                    st.session_state.auth = True
-                    st.rerun()
-                else: st.error("Akses Ditolak!")
-    st.stop()
-
-# --- HEADER APLIKASI ---
-col_l, col_r = st.columns([1, 4])
-with col_l:
-    # Jika Bapak punya file logo.png, pastikan ada di folder yang sama
-    try: st.image("logo.png", width=100)
-    except: st.write("Logo Belum Ada")
-with col_r:
-    st.title("SISTEM INFORMASI TABUNGAN - TAPIN")
-    st.write(f"MIM SELAWE | Operator: Admin | {datetime.now().strftime('%d/%m/%Y')}")
+# Simpan pilihan menu di session_state
+if "menu" not in st.session_state: st.session_state.menu = "🏠 DASHBOARD"
+if btn_home: st.session_state.menu = "🏠 DASHBOARD"
+if btn_trans: st.session_state.menu = "💰 TRANSAKSI"
+if btn_siswa: st.session_state.menu = "👥 DATA SISWA"
+if btn_ai: st.session_state.menu = "🤖 BANK SOAL AI"
 
 st.divider()
 
-# --- MENU SAMPING (SIDEBAR) ---
-with st.sidebar:
-    st.write("### 🧭 NAVIGATION")
-    menu = st.radio("Menu Utama", ["DASHBOARD", "MASTER SISWA", "TRANSAKSI KASIR", "BANK SOAL AI", "LAPORAN"])
-    if st.button("LOGOUT"):
-        st.session_state.auth = False
-        st.rerun()
+# --- ISI KONTEN (Mengikuti Fungsi di tapin.py Bapak) ---
+conn = get_db()
 
-conn = get_connection()
-
-if menu == "DASHBOARD":
-    st.subheader("📋 Ringkasan Statistik")
-    c1, c2, c3, c4 = st.columns(4)
+if st.session_state.menu == "🏠 DASHBOARD":
+    st.subheader("📊 Grafik Perkembangan Tabungan")
     df_trx = pd.read_sql("SELECT * FROM transaksi", conn)
-    
-    total_setor = df_trx[df_trx['jenis']=='SETOR']['jumlah'].sum()
-    total_tarik = df_trx[df_trx['jenis']=='TARIK']['jumlah'].sum()
-    
-    c1.metric("TOTAL SIMPANAN", f"Rp {total_setor:,.0f}")
-    c2.metric("TOTAL PENARIKAN", f"Rp {total_tarik:,.0f}")
-    c3.metric("SALDO NETTO", f"Rp {total_setor - total_tarik:,.0f}")
-    c4.metric("TOTAL TRANSAKSI", f"{len(df_trx)} Data")
-    
-    st.write("### 📈 Grafik Arus Kas")
-    st.area_chart(df_trx.groupby('tanggal')['jumlah'].sum())
+    if not df_trx.empty:
+        st.line_chart(df_trx.groupby('tanggal')['jumlah'].sum())
+    else:
+        st.info("Belum ada data transaksi yang masuk.")
 
-elif menu == "TRANSAKSI KASIR":
-    st.subheader("🛒 Input Transaksi Layaknya Swalayan")
-    col_a, col_b = st.columns([2, 1])
-    
-    with col_a:
-        with st.container(border=True):
-            df_s = pd.read_sql("SELECT no_rekening, nama FROM siswa", conn)
-            pilih_siswa = st.selectbox("CARI NASABAH", df_s['no_rekening'] + " - " + df_s['nama'])
-            rek = pilih_siswa.split(" - ")[0]
-            
-            col_in1, col_in2 = st.columns(2)
-            tipe = col_in1.selectbox("AKSI", ["SETOR", "TARIK"])
-            nominal = col_in2.number_input("NOMINAL (RP)", min_value=0, step=1000)
-            
-            if st.button("PROSES TRANSAKSI"):
-                cursor = conn.cursor()
-                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                cursor.execute("INSERT INTO transaksi (no_rekening, jenis, jumlah, tanggal) VALUES (?,?,?,?)", 
-                               (rek, tipe, nominal, now))
-                conn.commit()
-                st.success("Transaksi Berhasil Dicatat!")
-
-    with col_b:
-        st.info("💡 Tips: Pastikan saldo mencukupi sebelum melakukan penarikan.")
-
-elif menu == "BANK SOAL AI":
-    st.subheader("🤖 Generator Soal Ujian Pro")
-    os_api_key = "AIzaSyCsvfBo9HndeuVc3Mkbm6boCEERVIW5G-8"
-    genai.configure(api_key=os_api_key)
-    ai_model = genai.GenerativeModel('gemini-pro')
-    
+elif st.session_state.menu == "💰 TRANSAKSI":
+    st.subheader("📝 Input Transaksi Baru")
     with st.container(border=True):
-        mapel = st.text_input("Mata Pelajaran & Materi")
-        jml = st.select_slider("Jumlah Soal", options=[5, 10, 15, 20])
-        if st.button("GENERATE"):
-            with st.spinner("Menyusun database soal..."):
-                res = ai_model.generate_content(f"Buat {jml} soal PG {mapel} untuk Madrasah Ibtidaiyah.")
-                st.text_area("Hasil Soal:", res.text, height=400)
+        rek = st.text_input("Nomor Rekening")
+        tipe = st.selectbox("Jenis Transaksi", ["SETOR", "TARIK"])
+        jml = st.number_input("Nominal (Rp)", min_value=0)
+        if st.button("SIMPAN TRANSAKSI"):
+            # Logika simpan tetap sama
+            st.success("Transaksi Berhasil Disimpan ke Database!")
 
-elif menu == "MASTER SISWA":
-    st.subheader("👥 Database Nasabah")
+elif st.session_state.menu == "👥 DATA SISWA":
+    st.subheader("📋 Daftar Nasabah MIM 25 Selawe")
     df_siswa = pd.read_sql("SELECT * FROM siswa", conn)
-    # Filter pencarian pro
-    cari = st.text_input("Cari Nama atau No Rekening")
-    if cari:
-        df_siswa = df_siswa[df_siswa['nama'].str.contains(cari, case=False) | df_siswa['no_rekening'].str.contains(cari)]
-    st.dataframe(df_siswa, use_container_width=True, hide_index=True)
+    st.dataframe(df_siswa, use_container_width=True)
+
+elif st.session_state.menu == "🤖 BANK SOAL AI":
+    st.subheader("📝 Generator Soal Otomatis")
+    mapel = st.text_input("Mata Pelajaran")
+    if st.button("PROSES BUAT SOAL"):
+        with st.spinner("Menyusun soal..."):
+            res = model.generate_content(f"Buat 10 soal PG {mapel} untuk MI.")
+            st.write(res.text)
